@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hand Washing Steps Game</title>
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f0f9ff;
+        padding: 20px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      h1 {
+        color: #0096c7;
+        text-align: center;
+      }
+      .instructions {
+        background-color: #caf0f8;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+      }
+      .game-container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .drop-zone {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        min-height: 250px;
+        padding: 15px;
+        background-color: #ade8f4;
+        border-radius: 10px;
+        border: 2px dashed #0077b6;
+      }
+      .image-container {
+        width: 150px;
+        height: 150px;
+        padding: 5px;
+        background-color: white;
+        border-radius: 5px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        cursor: grab;
+        user-select: none;
+        position: relative;
+      }
+      .image-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .image-container.dragging {
+        opacity: 0.7;
+        cursor: grabbing;
+      }
+      .order-indicator {
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        background-color: #0077b6;
+        color: white;
+        width: 25px;
+        height: 25px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+      }
+      .success-message {
+        background-color: #72e897;
+        color: #034b1b;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        font-size: 24px;
+        font-weight: bold;
+        display: none;
+        animation: pop 0.5s ease-out;
+      }
+      @keyframes pop {
+        0% {
+          transform: scale(0.8);
+          opacity: 0;
+        }
+        50% {
+          transform: scale(1.1);
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+      .confetti {
+        position: fixed;
+        width: 10px;
+        height: 10px;
+        background-color: #f0f;
+        animation: fall linear forwards;
+        z-index: 1000;
+      }
+      @keyframes fall {
+        to {
+          transform: translateY(100vh) rotate(360deg);
+        }
+      }
+      @media (max-width: 600px) {
+        .image-container {
+          width: 120px;
+          height: 120px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Ordina i Passi del Lavaggio delle Mani</h1>
+
+    <div class="instructions">
+      <p>
+        Trascina le immagini nell'ordine corretto (1-6). Quando avrai ordinato correttamente tutte le
+        immagini, riceverai un messaggio di conferma.
+      </p>
+    </div>
+
+    <div class="game-container">
+      <div id="drop-zone" class="drop-zone"></div>
+      <div id="success-message" class="success-message">
+        Corretto! Hai ordinato correttamente i passi del lavaggio delle mani!
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const dropZone = document.getElementById('drop-zone');
+        const successMessage = document.getElementById('success-message');
+        let images = [];
+
+        // Create image elements and add to array
+        for (let i = 1; i <= 6; i++) {
+          const imageContainer = document.createElement('div');
+          imageContainer.className = 'image-container';
+          imageContainer.dataset.correctOrder = i;
+
+          const img = document.createElement('img');
+          img.src = `${i}.jpg`; // This should be replaced with actual image URLs
+          img.alt = `Hand washing step ${i}`;
+
+          const orderIndicator = document.createElement('div');
+          orderIndicator.className = 'order-indicator';
+          orderIndicator.textContent = '?';
+
+          imageContainer.appendChild(img);
+          imageContainer.appendChild(orderIndicator);
+          images.push(imageContainer);
+        }
+
+        // Shuffle the images
+        images = shuffleArray(images);
+
+        // Add images to the drop zone
+        images.forEach((image, index) => {
+          dropZone.appendChild(image);
+          updateOrderIndicator(image, index + 1);
+
+          // Add drag events
+          image.draggable = true;
+          image.addEventListener('dragstart', handleDragStart);
+          image.addEventListener('dragend', handleDragEnd);
+
+          // Touch events for mobile
+          image.addEventListener('touchstart', handleTouchStart, { passive: false });
+          image.addEventListener('touchmove', handleTouchMove, { passive: false });
+          image.addEventListener('touchend', handleTouchEnd);
+        });
+
+        // Add drop events to container
+        dropZone.addEventListener('dragover', handleDragOver);
+        dropZone.addEventListener('drop', handleDrop);
+
+        let draggedElement = null;
+        let touchStartX, touchStartY;
+
+        function handleDragStart(e) {
+          draggedElement = this;
+          this.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/html', this.outerHTML);
+        }
+
+        function handleDragEnd() {
+          this.classList.remove('dragging');
+          checkOrder();
+        }
+
+        function handleDragOver(e) {
+          e.preventDefault();
+          return false;
+        }
+
+        function handleDrop(e) {
+          e.preventDefault();
+          if (!draggedElement) return;
+
+          const afterElement = getDragAfterElement(dropZone, e.clientX, e.clientY);
+
+          if (afterElement) {
+            dropZone.insertBefore(draggedElement, afterElement);
+          } else {
+            dropZone.appendChild(draggedElement);
+          }
+
+          updateOrderIndicators();
+          return false;
+        }
+
+        function handleTouchStart(e) {
+          e.preventDefault();
+          draggedElement = this;
+          this.classList.add('dragging');
+
+          const touch = e.touches[0];
+          touchStartX = touch.clientX;
+          touchStartY = touch.clientY;
+
+          // Store the original position
+          this.style.position = 'absolute';
+          this.style.zIndex = 1000;
+        }
+
+        function handleTouchMove(e) {
+          e.preventDefault();
+          if (!draggedElement) return;
+
+          const touch = e.touches[0];
+          const offsetX = touch.clientX - touchStartX;
+          const offsetY = touch.clientY - touchStartY;
+
+          draggedElement.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+        }
+
+        function handleTouchEnd(e) {
+          if (!draggedElement) return;
+
+          draggedElement.classList.remove('dragging');
+          draggedElement.style.position = '';
+          draggedElement.style.transform = '';
+          draggedElement.style.zIndex = '';
+
+          const touch = e.changedTouches[0];
+          const afterElement = getDragAfterElement(dropZone, touch.clientX, touch.clientY);
+
+          if (afterElement) {
+            dropZone.insertBefore(draggedElement, afterElement);
+          } else {
+            dropZone.appendChild(draggedElement);
+          }
+
+          updateOrderIndicators();
+          checkOrder();
+          draggedElement = null;
+        }
+
+        function getDragAfterElement(container, x, y) {
+          const draggableElements = [...container.querySelectorAll('.image-container:not(.dragging)')];
+
+          return draggableElements.reduce(
+            (closest, child) => {
+              const box = child.getBoundingClientRect();
+              const offsetY = y - box.top - box.height / 2;
+              const offsetX = x - box.left - box.width / 2;
+
+              // Using a combination of X and Y for better positioning
+              const offset = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
+
+              if (offset < 100) {
+                return { offset: offset, element: child };
+              } else {
+                return closest;
+              }
+            },
+            { offset: Number.POSITIVE_INFINITY }
+          ).element;
+        }
+
+        function updateOrderIndicators() {
+          const containers = dropZone.querySelectorAll('.image-container');
+          containers.forEach((container, index) => {
+            updateOrderIndicator(container, index + 1);
+          });
+        }
+
+        function updateOrderIndicator(container, order) {
+          const indicator = container.querySelector('.order-indicator');
+          indicator.textContent = order;
+        }
+
+        function checkOrder() {
+          const containers = dropZone.querySelectorAll('.image-container');
+          let isCorrect = true;
+
+          containers.forEach((container, index) => {
+            if (parseInt(container.dataset.correctOrder) !== index + 1) {
+              isCorrect = false;
+            }
+          });
+
+          if (isCorrect) {
+            successMessage.style.display = 'block';
+            createConfetti();
+          } else {
+            successMessage.style.display = 'none';
+          }
+        }
+
+        function createConfetti() {
+          const confettiCount = 100;
+          const colors = ['#FF577F', '#FF884B', '#FFD384', '#FFF9B0', '#7AD3FA', '#8DDFCB', '#B983FF'];
+
+          for (let i = 0; i < confettiCount; i++) {
+            const confetti = document.createElement('div');
+            confetti.className = 'confetti';
+            confetti.style.left = `${Math.random() * 100}vw`;
+            confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            confetti.style.width = `${Math.random() * 10 + 5}px`;
+            confetti.style.height = `${Math.random() * 10 + 5}px`;
+            confetti.style.opacity = Math.random();
+            confetti.style.animationDuration = `${Math.random() * 3 + 2}s`;
+
+            document.body.appendChild(confetti);
+
+            // Remove confetti after animation
+            setTimeout(() => {
+              confetti.remove();
+            }, 5000);
+          }
+        }
+
+        function shuffleArray(array) {
+          const newArray = [...array];
+          for (let i = newArray.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+          }
+          return newArray;
+        }
+      });
+    </script>
+  </body>
+</html>
