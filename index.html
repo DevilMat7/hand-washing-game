@@ -182,6 +182,7 @@
         dropZone.addEventListener('drop', handleDrop);
 
         let draggedElement = null;
+        let selectedElement = null;
         let touchStartX, touchStartY;
 
         function handleDragStart(e) {
@@ -221,47 +222,42 @@
           e.preventDefault();
           draggedElement = this;
           this.classList.add('dragging');
-
-          const touch = e.touches[0];
-          touchStartX = touch.clientX;
-          touchStartY = touch.clientY;
-
-          // Store the original position
-          this.style.position = 'absolute';
-          this.style.zIndex = 1000;
         }
 
         function handleTouchMove(e) {
+          // Disabilitiamo il movimento per evitare scroll accidentali
           e.preventDefault();
-          if (!draggedElement) return;
-
-          const touch = e.touches[0];
-          const offsetX = touch.clientX - touchStartX;
-          const offsetY = touch.clientY - touchStartY;
-
-          draggedElement.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
         }
 
         function handleTouchEnd(e) {
+          e.preventDefault();
           if (!draggedElement) return;
 
-          draggedElement.classList.remove('dragging');
-          draggedElement.style.position = '';
-          draggedElement.style.transform = '';
-          draggedElement.style.zIndex = '';
-
+          // Otteniamo la posizione del touch
           const touch = e.changedTouches[0];
-          const afterElement = getDragAfterElement(dropZone, touch.clientX, touch.clientY);
+          const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY);
 
-          if (afterElement) {
-            dropZone.insertBefore(draggedElement, afterElement);
-          } else {
-            dropZone.appendChild(draggedElement);
+          // Cerchiamo il contenitore immagine sopra cui si è rilasciato
+          const dropContainer = dropTarget.closest('.image-container');
+
+          if (dropContainer && dropContainer !== draggedElement) {
+            // Scambiamo le due immagini
+            const draggedIndex = Array.from(dropZone.children).indexOf(draggedElement);
+            const dropIndex = Array.from(dropZone.children).indexOf(dropContainer);
+
+            if (draggedIndex < dropIndex) {
+              dropZone.insertBefore(dropContainer, draggedElement);
+              dropZone.insertBefore(draggedElement, dropContainer.nextSibling);
+            } else {
+              dropZone.insertBefore(draggedElement, dropContainer);
+            }
           }
+
+          draggedElement.classList.remove('dragging');
+          draggedElement = null;
 
           updateOrderIndicators();
           checkOrder();
-          draggedElement = null;
         }
 
         function getDragAfterElement(container, x, y) {
